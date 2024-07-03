@@ -1,1 +1,1 @@
-# roslyn-analysers
+# roslyn-analyzers
