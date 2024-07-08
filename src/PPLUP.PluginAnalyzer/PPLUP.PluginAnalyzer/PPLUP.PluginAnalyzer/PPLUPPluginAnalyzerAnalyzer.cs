@@ -2,12 +2,9 @@
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
-using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
 
 namespace PPLUP.PluginAnalyzer
 {
@@ -35,9 +32,6 @@ namespace PPLUP.PluginAnalyzer
         );
         private const string Category = "Dataverse";
 
-        private static readonly Action<CompilationAnalysisContext> CompilationAction =
-            CompilationAnalysis;
-
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             DiagnosticId,
             Title,
@@ -57,12 +51,6 @@ namespace PPLUP.PluginAnalyzer
         {
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
             context.EnableConcurrentExecution();
-
-            // TODO: Consider registering other actions that act on syntax instead of or in addition to symbols
-            // See https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Analyzer%20Actions%20Semantics.md for more information
-            //context.RegisterSymbolAction(AnalyzeSymbol, SymbolKind.NamedType);
-            //context.RegisterSyntaxTreeAction(SyntaxTreeAnalysis);
-            //context.RegisterCompilationAction(CompilationAction);
             context.RegisterSemanticModelAction(SemanticModelAction);
         }
 
@@ -112,93 +100,6 @@ namespace PPLUP.PluginAnalyzer
                 break;
             }
             return false;
-        }
-
-        private static void CompilationAnalysis(CompilationAnalysisContext context)
-        {
-            Console.WriteLine(
-                $"Parsing {context.Compilation.SyntaxTrees.ToArray().Length} SyntaxTrees"
-            );
-            foreach (var tree in context.Compilation.SyntaxTrees)
-            {
-                var root = tree.GetRoot();
-
-                var classNodes = (
-                    from c in root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-                    where
-                        c.BaseList
-                            .DescendantNodes()
-                            .OfType<IdentifierNameSyntax>()
-                            .Any(b => b.Identifier.Text == "IPlugin")
-                    select c
-                ).ToList();
-
-                foreach (var item in classNodes)
-                {
-                    checkClass(item, out var diags);
-
-                    foreach (var d in diags)
-                    {
-                        context.ReportDiagnostic(d);
-                    }
-                }
-
-                var baseClasses =
-                    from c in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
-                    where
-                        c.BaseList
-                            .DescendantNodes()
-                            .OfType<IdentifierNameSyntax>()
-                            .Any(b => b.Identifier.Text == "IPlugin")
-                    select c;
-
-                Console.WriteLine($"Parsing {baseClasses.ToArray().Length} BaseTypeDeclarations");
-                foreach (var baseClass in baseClasses)
-                {
-                    var bc =
-                        from c in root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-                        where
-                            c.BaseList
-                                .DescendantNodes()
-                                .OfType<IdentifierNameSyntax>()
-                                .Any(b => b.Identifier.Text == baseClass.Identifier.Text)
-                        select c;
-                    Console.WriteLine($"Parsing {bc.ToArray().Length} ClassDeclarations");
-                    foreach (var item in bc)
-                    {
-                        checkClass(item, out var diags);
-
-                        foreach (var d in diags)
-                        {
-                            context.ReportDiagnostic(d);
-                        }
-                    }
-                }
-            }
-        }
-
-        private static void SyntaxTreeAnalysis(SyntaxTreeAnalysisContext context)
-        {
-            var root = context.Tree.GetRoot();
-
-            var classNodes = (
-                from c in root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-                where
-                    c.BaseList
-                        .DescendantNodes()
-                        .OfType<IdentifierNameSyntax>()
-                        .Any(b => b.Identifier.Text == "IPlugin")
-                select c
-            ).ToList();
-
-            foreach (var item in classNodes)
-            {
-                checkClass(item, out var diags);
-                foreach (var d in diags)
-                {
-                    context.ReportDiagnostic(d);
-                }
-            }
         }
 
         private static void checkClass(ClassDeclarationSyntax root, out List<Diagnostic> diags)
