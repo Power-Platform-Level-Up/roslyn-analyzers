@@ -62,7 +62,56 @@ namespace PPLUP.PluginAnalyzer
             // See https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Analyzer%20Actions%20Semantics.md for more information
             //context.RegisterSymbolAction(AnalyzeSymbol, SymbolKind.NamedType);
             //context.RegisterSyntaxTreeAction(SyntaxTreeAnalysis);
-            context.RegisterCompilationAction(CompilationAction);
+            //context.RegisterCompilationAction(CompilationAction);
+            context.RegisterSemanticModelAction(SemanticModelAction);
+        }
+
+        private static void SemanticModelAction(SemanticModelAnalysisContext context)
+        {
+            var model = context.SemanticModel;
+            var tree = model.SyntaxTree;
+            var classes = tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>();
+            foreach (var item in classes)
+            {
+                var symbol = model.GetDeclaredSymbol(item);
+                var implimentsIPlugin = ImplimentsIPlugin(symbol);
+                if (implimentsIPlugin)
+                {
+                    checkClass(item, out var diags);
+                    foreach (var d in diags)
+                    {
+                        context.ReportDiagnostic(d);
+                    }
+                }
+            }
+        }
+
+        private static bool ImplimentsIPlugin(INamedTypeSymbol symbol)
+        {
+            while (true)
+            {
+                if (symbol.ToString() == "Microsoft.Xrm.Sdk.IPlugin")
+                {
+                    return true;
+                }
+                if (symbol.Interfaces != null && symbol.Interfaces.Length > 0)
+                {
+                    foreach (var interfaceSymbol in symbol.Interfaces)
+                    {
+                        if (interfaceSymbol.ToString() == "Microsoft.Xrm.Sdk.IPlugin")
+                        {
+                            return true;
+                        }
+                    }
+                }
+                if (symbol.BaseType != null)
+                {
+                    symbol = symbol.BaseType;
+                    continue;
+                }
+                break;
+            }
+            return false;
         }
 
         private static void CompilationAnalysis(CompilationAnalysisContext context)
